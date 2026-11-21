@@ -1,0 +1,1 @@
+"""Qadam task management application."""
