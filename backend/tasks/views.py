@@ -48,20 +48,47 @@ def sign_in(request):
         data = json.loads(request.body or '{}')
     except (json.JSONDecodeError, UnicodeDecodeError):
         return JsonResponse({'error': 'So‘rov formati noto‘g‘ri.'}, status=400)
+
     username = str(data.get('username', '')).strip()[:150]
     address = request.META.get('REMOTE_ADDR', 'unknown')
     key = f'qadam-login:{address}:{username.casefold()}'
-    if cache.get(key, 0) >= 15:
-        return JsonResponse({'error': 'Urinishlar soni ko‘payib ketdi. 15 daqiqadan so‘ng qayta urinib ko‘ring.'}, status=429)
-    user = authenticate(request, username=username, password=data.get('password', ''))
+
+    try:
+        if (cache.get(key) or 0) >= 15:
+            return JsonResponse({'error': 'Urinishlar soni ko‘payib ketdi. 15 daqiqadan so‘ng qayta urinib ko‘ring.'}, status=429)
+    except Exception:
+        pass
+
+    try:
+        user = authenticate(request, username=username, password=data.get('password', ''))
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception("Auth error during sign_in")
+        return JsonResponse({'error': f'Autentifikatsiya xatosi: {exc}'}, status=500)
+
     if user is None:
-        cache.add(key, 0, 900)
-        cache.incr(key)
+        try:
+            attempts = (cache.get(key) or 0) + 1
+            cache.set(key, attempts, 900)
+        except Exception:
+            pass
         return JsonResponse({'error': 'Login yoki parol noto‘g‘ri.'}, status=401)
+
     if not user.is_active:
         return JsonResponse({'error': 'Hisob vaqtincha o‘chirilgan.'}, status=403)
-    cache.delete(key)
-    login(request, user)
+
+    try:
+        cache.delete(key)
+    except Exception:
+        pass
+
+    try:
+        login(request, user)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception("Session error during login")
+        return JsonResponse({'error': f'Sessiya xatosi: {exc}'}, status=500)
+
     return JsonResponse({'user': user_payload(user), 'csrfToken': get_token(request)})
 
 @require_POST
