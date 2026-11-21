@@ -1,6 +1,6 @@
 import type { CurrentUser, Developer, TaskItem } from '../types'
 
-const API = '/api'
+const API = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '')
 let csrfToken = ''
 
 export async function refreshCsrf(): Promise<boolean> {
